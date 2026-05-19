@@ -10,7 +10,7 @@ import shap
 from scipy.ndimage import gaussian_filter1d
 
 # =========================
-# 0. 基础设置（期刊风格）
+# 0. Basic settings (journal style)
 # =========================
 mpl.rcParams.update({
     'font.sans-serif': ['Arial'],
@@ -21,9 +21,9 @@ mpl.rcParams.update({
     'xtick.labelsize': 6,
     'ytick.labelsize': 6,
     'legend.fontsize': 6,
-    "pdf.fonttype": 42,  # PDF 用 TrueType (Type 42)，AI 等能正确识别
-    "ps.fonttype": 42,  # EPS 同理
-    "svg.fonttype": "none",  # SVG 保留文字，不转成 path 子集
+    "pdf.fonttype": 42,  # Use TrueType (Type 42) for PDF so that Illustrator and similar software can read fonts correctly
+    "ps.fonttype": 42,  # Use the same font embedding setting for EPS
+    "svg.fonttype": "none",  # Keep text as editable text in SVG instead of converting it to path subsets
 })
 plt.rcParams['figure.dpi'] = 300
 
@@ -31,17 +31,17 @@ plt.rcParams['figure.dpi'] = 300
 
 
 # =========================
-# 1. 通用函数
+# 1. General functions
 # =========================
 def train_xgb_and_analyze(csv_path, label_col, scenario_name,
                           test_size=0.5, random_state=10, n_repeats=5):
     """
-    对一份数据（一个标签体系）进行：
-    - train / test 划分
-    - XGBoost 训练
-    - ROC / AUC 计算
-    - permutation importance (ΔAUC, Std) 计算
-    - SHAP values 计算
+    Run the full analysis for one dataset and one label system:
+    - train/test split
+    - XGBoost training
+    - ROC/AUC calculation
+    - permutation importance calculation (ΔAUC and standard deviation)
+    - SHAP value calculation
     """
     df = pd.read_csv(csv_path)
     X = df.drop(columns=[label_col])
@@ -80,22 +80,22 @@ def train_xgb_and_analyze(csv_path, label_col, scenario_name,
         verbose_eval=False
     )
 
-    # 概率预测
+    # Probability prediction
     y_prob = bst.predict(dtest)
     y_pred = (y_prob >= 0.5).astype(int)
 
-    # 基本指标
+    # Basic metrics
     auc = metrics.roc_auc_score(test_y, y_prob)
     acc = metrics.accuracy_score(test_y, y_pred)
     f1 = metrics.f1_score(test_y, y_pred)
     print(f"\n=== {scenario_name} ===")
     print(f"AUC = {auc:.4f}, ACC = {acc:.4f}, F1 = {f1:.4f}")
 
-    # ROC 曲线
+    # ROC curve
     fpr, tpr, _ = metrics.roc_curve(test_y, y_prob)
     original_auc = auc
 
-    # ---------- 置换重要性 ΔAUC ----------
+    # ---------- Permutation importance based on ΔAUC ----------
     def permutation_importance_auc(model, test_x, y_true, feature_names, n_repeats=5):
         all_perm_scores = []
         for _ in range(n_repeats):
@@ -126,7 +126,7 @@ def train_xgb_and_analyze(csv_path, label_col, scenario_name,
     )
     perm_df["Scenario"] = scenario_name
 
-    # SHAP
+    # SHAP analysis
     explainer = shap.TreeExplainer(bst)
     shap_values = explainer.shap_values(test_x)
 
@@ -145,7 +145,7 @@ def train_xgb_and_analyze(csv_path, label_col, scenario_name,
 
 
 def make_calibration_points(y_true, y_prob, n_bins=10, min_samples=20):
-    """计算校准曲线点：每个概率 bin 的预测均值与实际频率。"""
+    """Calculate calibration-curve points: mean predicted probability and observed frequency in each probability bin."""
     y_true = np.asarray(y_true)
     y_prob = np.asarray(y_prob)
 
@@ -172,7 +172,7 @@ def make_calibration_points(y_true, y_prob, n_bins=10, min_samples=20):
 
 
 def compute_f1_curve(y_true, y_prob, n_thresholds=50):
-    """计算不同阈值下的 F1 分数。"""
+    """Calculate F1 scores under different decision thresholds."""
     y_true = np.asarray(y_true)
     y_prob = np.asarray(y_prob)
 
@@ -187,11 +187,11 @@ def compute_f1_curve(y_true, y_prob, n_thresholds=50):
 
 
 # =========================
-# 2. 分别处理两个表格
+# 2. Process the two input tables separately
 # =========================
-erosion_csv = "erosion_label.csv"   # 真实侵蚀标签数据
-geop_csv    = "geop_label.csv"      # GEOP 模型标签数据
-label_col   = "CID"                 # 两个表中标签列的名字
+erosion_csv = "erosion_label.csv"   # Observed erosion-label dataset
+geop_csv    = "geop_label.csv"      # GEOP-derived label dataset
+label_col   = "CID"                 # Name of the label column in both tables
 
 erosion_res = train_xgb_and_analyze(
     erosion_csv, label_col, scenario_name="Erosion label",
@@ -204,7 +204,7 @@ geop_res = train_xgb_and_analyze(
 )
 
 # =========================
-# 3. 组合 ΔAUC 结果 (a)
+# 3. Combine ΔAUC results for panel (a)
 # =========================
 perm_all = pd.concat([erosion_res["perm"], geop_res["perm"]], ignore_index=True)
 
@@ -219,7 +219,7 @@ features = pivot_delta.index.tolist()
 y_pos = np.arange(len(features))
 
 # =========================
-# 4. SHAP 平均绝对值（e）
+# 4. Mean absolute SHAP values for panel (e)
 # =========================
 shap_vals_erosion = erosion_res["shap_values"]
 feat_names = erosion_res["feature_names"]
@@ -235,7 +235,7 @@ imp_merge = (
     .merge(shap_importance_erosion, on="Feature", how="inner")
 )
 
-# ---- 选前 5 个因子，用于 SHAP dependence (b) ----
+# ---- Select the top five factors for SHAP dependence plots in panel (b) ----
 top5_features = (
     perm_all[perm_all["Scenario"] == "Erosion label"]
     .sort_values("ΔAUC", ascending=False)["Feature"]
@@ -245,7 +245,7 @@ top5_features = (
 print("\nTop 5 features (by ΔAUC of Erosion label):", top5_features)
 
 # =========================
-# 5. 校准曲线数据 (d)
+# 5. Calibration-curve data for panel (d)
 # =========================
 bins = 10
 centers_e, prob_e, freq_e = make_calibration_points(
@@ -259,13 +259,13 @@ mask_e = ~np.isnan(prob_e) & ~np.isnan(freq_e)
 mask_g = ~np.isnan(prob_g) & ~np.isnan(freq_g)
 
 # =========================
-# 6. 阈值–F1 曲线数据 (f)
+# 6. Threshold–F1 curve data for panel (f)
 # =========================
 thr_e, f1_e = compute_f1_curve(erosion_res["y_true"], erosion_res["y_prob"])
 thr_g, f1_g = compute_f1_curve(geop_res["y_true"], geop_res["y_prob"])
 
 # =========================
-# 7. 生成 3 行大组图（a–f）
+# 7. Generate the three-row multi-panel figure (a–f)
 # =========================
 fig = plt.figure(figsize=(7.2, 5.0))
 gs = gridspec.GridSpec(
@@ -276,7 +276,7 @@ gs = gridspec.GridSpec(
     wspace=0.35
 )
 
-# ---------- (a) ΔAUC 分组条形图 ----------
+# ---------- (a) Grouped horizontal bar chart of ΔAUC ----------
 ax_a = fig.add_subplot(gs[0, :])
 
 bar_height = 0.32
@@ -313,7 +313,7 @@ ax_a.set_title("(a) Permutation importance (ΔAUC ± 1σ)", loc="left")
 ax_a.legend(loc="lower right", frameon=False)
 ax_a.xaxis.grid(True, linestyle=":", linewidth=0.4, alpha=0.5)
 
-# ---------- (b) Top5 SHAP dependence：两套模型 + 平滑 ----------
+# ---------- (b) Top-five SHAP dependence plots: two models with smoothed trends ----------
 shap_vals_e = erosion_res["shap_values"]
 X_test_e    = erosion_res["X_test"]
 feat_names_e = erosion_res["feature_names"]
@@ -324,7 +324,7 @@ feat_names_g = geop_res["feature_names"]
 
 sub_gs = gs[1, 0:2].subgridspec(2, 3, wspace=0.4, hspace=0.45)
 
-# 先算统一 y 轴范围（两套模型一起）
+# First calculate a unified y-axis range for the two models
 ymins, ymaxs = [], []
 for feat in top5_features:
     j_e = feat_names_e.index(feat)
@@ -374,16 +374,16 @@ for idx, feat in enumerate(top5_features):
                color="tab:orange", edgecolor="none", label="GEOP label" if idx == 0 else None)
     ax.plot(xs_g, ys_g_smooth, color="tab:orange", linewidth=1.0)
 
-    # y=0 参考线
+    # y = 0 reference line
     ax.axhline(0, color="grey", linestyle="--", linewidth=0.5)
 
-    # 统一 y 范围
+    # Apply the unified y-axis range
     ax.set_ylim(ymin, ymax)
 
-    # 所有子图都写 x 轴变量名（不用 title）
+    # Use the feature name as the x-axis label for each subplot; no title is used
     ax.set_xlabel(feat, fontsize=7)
 
-    # 左列显示 y 刻度，右两列隐藏 y 刻度，避免太挤
+    # Show y-axis tick labels only in the left column to avoid crowding
     if col == 0:
         ax.tick_params(axis='y', labelleft=True)
     else:
@@ -391,14 +391,14 @@ for idx, feat in enumerate(top5_features):
 
     ax.tick_params(axis='both', labelsize=6)
 
-# b 面板左侧整体标签
+# Overall left-side label for panel (b)
 fig.text(
     0.015, 0.36,
     "(b) SHAP dependence of leading factors\nSHAP value",
     fontsize=8, rotation=90, va="center"
 )
 
-# 在 b 面板右下角单独放一个小图例（不用占主图空间）
+# Place a small legend in the lower-right position of panel (b) to avoid occupying the main plot area
 ax_b_legend = fig.add_subplot(sub_gs[1, 2])
 ax_b_legend.axis("off")
 ax_b_legend.scatter([], [], color="tab:blue", label="Erosion label")
@@ -406,7 +406,7 @@ ax_b_legend.scatter([], [], color="tab:orange", label="GEOP label")
 ax_b_legend.legend(loc="center", frameon=False)
 
 
-# ---------- (c) ROC 曲线 ----------
+# ---------- (c) ROC curves ----------
 ax_c = fig.add_subplot(gs[1, 2])
 ax_c.plot(
     erosion_res["roc_fpr"], erosion_res["roc_tpr"],
@@ -448,7 +448,7 @@ ax_d.set_ylabel("Observed frequency")
 ax_d.set_title("(d) Calibration curves", loc="left")
 ax_d.legend(loc="upper left", frameon=False)
 
-# ---------- (e) ΔAUC vs mean |SHAP| ----------
+# ---------- (e) ΔAUC versus mean |SHAP| ----------
 ax_e = fig.add_subplot(bottom_gs[0, 1])
 ax_e.scatter(
     imp_merge["ΔAUC"],
@@ -471,7 +471,7 @@ ax_e.set_title("(e) ΔAUC vs mean |SHAP|", loc="left")
 ax_e.axvline(0, color='k', linestyle='--', linewidth=0.6)
 ax_e.grid(True, linestyle=":", linewidth=0.4, alpha=0.5)
 
-# ---------- (f) F1 vs threshold ----------
+# ---------- (f) F1 score versus decision threshold ----------
 ax_f = fig.add_subplot(gs[2, 2])
 ax_f.plot(thr_e, f1_e, color="tab:blue", lw=1.0, label="Erosion label")
 ax_f.plot(thr_g, f1_g, color="tab:orange", lw=1.0, label="GEOP label")

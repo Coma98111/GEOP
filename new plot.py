@@ -8,7 +8,7 @@ from sklearn import metrics
 import xgboost as xgb
 
 # =========================
-# 0. 基础设置（期刊风格）
+# 0. Basic settings (journal style)
 # =========================
 mpl.rcParams.update({
     "font.sans-serif": ["Arial"],
@@ -24,7 +24,7 @@ plt.rcParams["figure.dpi"] = 300
 
 
 # =========================
-# 1. 训练 + 预测的通用函数
+# 1. General function for training and prediction
 # =========================
 def train_xgb_and_predict(
     csv_path,
@@ -34,7 +34,7 @@ def train_xgb_and_predict(
     random_state=10,
 ):
     """
-    读入数据 → 划分 train/test → 训练 XGBoost → 返回测试集预测结果和指标
+    Read the data, split it into training and test sets, train XGBoost, and return test-set predictions and metrics.
     """
     df = pd.read_csv(csv_path)
 
@@ -74,16 +74,16 @@ def train_xgb_and_predict(
         verbose_eval=False,
     )
 
-    # 概率预测 & 默认阈值 0.5
+    # Probability prediction and default threshold of 0.5
     y_prob = bst.predict(dtest)
     y_pred = (y_prob >= 0.5).astype(int)
 
-    # 指标
+    # Metrics
     auc = metrics.roc_auc_score(y_test, y_prob)
     acc = metrics.accuracy_score(y_test, y_pred)
     f1 = metrics.f1_score(y_test, y_pred, zero_division=0)
 
-    # 混淆矩阵
+    # Confusion matrix
     cm = metrics.confusion_matrix(y_test, y_pred)  # [[TN, FP], [FN, TP]]
 
     print(f"\n=== {model_name} ===")
@@ -107,10 +107,10 @@ def train_xgb_and_predict(
 
 
 # =========================
-# 2. 加载两套数据并训练
+# 2. Load the two datasets and train the models
 # =========================
-erosion_csv = "erosion_label.csv"  # 真实侵蚀标签
-geop_csv = "geop_label.csv"        # GEOP 输出标签
+erosion_csv = "erosion_label.csv"  # Mapped erosion labels
+geop_csv = "geop_label.csv"        # GEOP output labels
 label_col = "CID"
 
 erosion_res = train_xgb_and_predict(
@@ -122,11 +122,11 @@ geop_res = train_xgb_and_predict(
 
 
 # =========================
-# 3. 一些辅助函数
+# 3. Helper functions
 # =========================
 def compute_positive_fraction(y_prob, n_thresholds=101):
     """
-    计算不同阈值下，预测为正样本的比例（%）
+    Compute the percentage of samples predicted as positive under different thresholds.
     """
     thresholds = np.linspace(0.0, 1.0, n_thresholds)
     frac = []
@@ -137,8 +137,8 @@ def compute_positive_fraction(y_prob, n_thresholds=101):
 
 def plot_confusion_matrix(ax, cm, title=""):
     """
-    简洁混淆矩阵绘图：颜色 = 百分比，文字 = 计数 + 百分比
-    cm: 2×2, [[TN, FP], [FN, TP]]
+    Plot a compact confusion matrix. Color indicates percentage; text indicates count and percentage.
+    cm: 2 x 2, [[TN, FP], [FN, TP]]
     """
     cm = np.asarray(cm)
     total = cm.sum()
@@ -146,7 +146,7 @@ def plot_confusion_matrix(ax, cm, title=""):
 
     im = ax.imshow(cm_pct, vmin=0, vmax=100, cmap="Blues")
 
-    # 在格子里写上 count 和 %
+    # Add count and percentage labels inside each cell
     for i in range(2):
         for j in range(2):
             ax.text(
@@ -166,14 +166,14 @@ def plot_confusion_matrix(ax, cm, title=""):
     ax.set_ylabel("True label")
     ax.set_title(title, fontsize=8)
 
-    # 加一个 colorbar（小一点）
+    # Add a compact colorbar
     cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label("Percentage (%)", fontsize=6)
     cbar.ax.tick_params(labelsize=5)
 
 
 # =========================
-# 4. 生成 c1–c3 组图
+# 4. Generate the c1-c3 composite figure
 # =========================
 fig = plt.figure(figsize=(7.5, 6.0))
 outer_gs = gridspec.GridSpec(
@@ -195,7 +195,7 @@ width = 0.35
 ax_c1.bar(x - width/2, erosion_vals, width, label="Erosion", color="#4C72B0")
 ax_c1.bar(x + width/2, geop_vals,    width, label="GEOP",    color="#DD8452")
 
-# 在柱子上标注数值
+# Add value labels above the bars
 for i, v in enumerate(erosion_vals):
     ax_c1.text(x[i] - width/2, v + 0.01, f"{v:.2f}", ha="center", va="bottom", fontsize=6)
 for i, v in enumerate(geop_vals):

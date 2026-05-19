@@ -9,34 +9,34 @@ from sklearn.model_selection import train_test_split
 import xgboost as xgb
 import seaborn as sns
 
-# --------------------------基础设置--------------------------
-# 字体设置（全英文避免中文问题）
+# --------------------------Basic settings--------------------------
+# Font settings. English labels are used to avoid Chinese-font rendering issues.
 mpl.rcParams['font.sans-serif'] = ['Arial']
-mpl.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+mpl.rcParams['axes.unicode_minus'] = False  # Ensure that minus signs are displayed correctly.
 
-# 自定义色带（绿-黄-红）
+# Custom color ramp (green-yellow-red).
 colors = [(0, 1, 0), (1, 1, 0), (1, 0, 0)]
 green_red_cmap = mcolors.LinearSegmentedColormap.from_list("green_red_cmap", colors)
 
-# --------------------------数据准备--------------------------
-# 导入数据集
-df = pd.read_csv('taget - qinshi.csv', encoding='GBK')
-data = df.iloc[:, 1:-1]  # 特征
-target = df.iloc[:, -1]  # 标签
+# --------------------------Data preparation--------------------------
+# Load the dataset.
+df = pd.read_csv('geop_label.csv', encoding='GBK')
+data = df.iloc[:, 1:-1]  # Features.
+target = df.iloc[:, -1]  # Labels.
 
-# 划分训练集和测试集（保持类别平衡）
+# Split the dataset into training and testing subsets while preserving class balance.
 train_x, test_x, train_y, test_y = train_test_split(
     data, target, test_size=0.3, random_state=10, stratify=target
 )
-feature_names = data.columns.tolist()  # 特征名称列表
+feature_names = data.columns.tolist()  # List of feature names.
 
-# --------------------------模型训练--------------------------
-# 构建DMatrix
+# --------------------------Model training--------------------------
+# Build DMatrix objects for XGBoost.
 dtrain = xgb.DMatrix(train_x, label=train_y)
 dtest = xgb.DMatrix(test_x, label=test_y)
 watchlist = [(dtrain, 'train'), (dtest, 'eval')]
 
-# XGBoost参数设置
+# XGBoost parameter settings.
 params = {
     'booster': 'gbtree',
     'objective': 'binary:logistic',
@@ -53,7 +53,7 @@ params = {
     'learning_rate': 0.06
 }
 
-# 训练模型（带早停机制）
+# Train the model with early stopping.
 bst = xgb.train(
     params, dtrain,
     num_boost_round=1000,
@@ -62,12 +62,12 @@ bst = xgb.train(
     verbose_eval=100
 )
 
-# --------------------------模型评估--------------------------
-# 预测与阈值设置
-ypred = bst.predict(dtest)  # 概率预测
-y_pred = (ypred >= 0.5) * 1  # 类别预测
+# --------------------------Model evaluation--------------------------
+# Prediction and default thresholding.
+ypred = bst.predict(dtest)  # Predicted probabilities.
+y_pred = (ypred >= 0.5) * 1  # Predicted classes.
 
-# 输出评估指标
+# Print evaluation metrics.
 print("\n=== Model Evaluation ===")
 print(f'Precision: {metrics.precision_score(test_y, y_pred):.4f}')
 print(f'Recall: {metrics.recall_score(test_y, y_pred):.4f}')
@@ -75,8 +75,8 @@ print(f'F1-score: {metrics.f1_score(test_y, y_pred):.4f}')
 print(f'Accuracy: {metrics.accuracy_score(test_y, y_pred):.4f}')
 print(f'AUC: {metrics.roc_auc_score(test_y, ypred):.4f}')
 
-# --------------------------新增：召回率曲线及阈值分析--------------------------
-# 计算不同阈值下的召回率、精确率和F1分数
+# --------------------------Recall curve and threshold analysis--------------------------
+# Calculate recall, precision and F1 score under different decision thresholds.
 thresholds = np.linspace(0, 1, 100)
 recall_scores = []
 precision_scores = []
@@ -88,7 +88,7 @@ for threshold in thresholds:
     precision_scores.append(metrics.precision_score(test_y, y_pred_threshold))
     f1_scores.append(metrics.f1_score(test_y, y_pred_threshold))
 
-# 图1：召回率曲线（Recall Curve）
+# Figure 1: recall curve.
 plt.figure(figsize=(10, 6))
 plt.plot(thresholds, recall_scores, color='green', lw=2, label='Recall')
 plt.axvline(x=0.5, color='red', linestyle='--', label='Default Threshold (0.5)')
@@ -102,7 +102,7 @@ plt.grid(alpha=0.3)
 plt.tight_layout()
 plt.show()
 
-# 图2：召回率-精确率-阈值综合曲线
+# Figure 2: combined recall-precision-F1 threshold curves.
 plt.figure(figsize=(10, 6))
 plt.plot(thresholds, recall_scores, color='green', lw=2, label='Recall')
 plt.plot(thresholds, precision_scores, color='blue', lw=2, label='Precision')
@@ -118,7 +118,7 @@ plt.grid(alpha=0.3)
 plt.tight_layout()
 plt.show()
 
-# 图3：召回率-精确率曲线（PR Curve）
+# Figure 3: precision-recall curve.
 precision, recall, _ = metrics.precision_recall_curve(test_y, ypred)
 pr_auc = metrics.auc(recall, precision)
 
@@ -134,12 +134,12 @@ plt.grid(alpha=0.3)
 plt.tight_layout()
 plt.show()
 
-# --------------------------置换重要性分析（ΔAUC）--------------------------
+# --------------------------Permutation importance analysis (Delta AUC)--------------------------
 original_auc = metrics.roc_auc_score(test_y, ypred)
 print(f'\nOriginal test set AUC: {original_auc:.4f}')
 
 
-# 计算置换重要性
+# Calculate permutation importance.
 def permutation_importance_auc(model, test_x, y_true, feature_names, n_repeats=5):
     auc_scores = []
     for _ in range(n_repeats):
@@ -151,7 +151,7 @@ def permutation_importance_auc(model, test_x, y_true, feature_names, n_repeats=5
             perm_auc.append(metrics.roc_auc_score(y_true, ypred_perm))
         auc_scores.append(perm_auc)
     mean_perm_auc = np.mean(auc_scores, axis=0)
-    delta_auc = original_auc - mean_perm_auc  # 可能包含负值
+    delta_auc = original_auc - mean_perm_auc  # Negative values may occur.
     return pd.DataFrame({
         'Feature': feature_names,
         'ΔAUC': delta_auc,
@@ -159,13 +159,13 @@ def permutation_importance_auc(model, test_x, y_true, feature_names, n_repeats=5
     }).sort_values(by='ΔAUC', ascending=False)
 
 
-# 计算并输出置换重要性结果
+# Calculate and print permutation-importance results.
 perm_importance = permutation_importance_auc(bst, test_x, test_y, feature_names)
 print("\n=== Permutation Importance (ΔAUC) ===")
 print(perm_importance)
 
 
-# 计算ΔAUC标准差（稳定性指标）
+# Calculate the standard deviation of Delta AUC as a stability metric.
 def permutation_auc_std(model, test_x, y_true, feature_names, n_repeats=5):
     perm_std = []
     for feature in feature_names:
@@ -180,8 +180,8 @@ def permutation_auc_std(model, test_x, y_true, feature_names, n_repeats=5):
 
 perm_importance['ΔAUC Std'] = permutation_auc_std(bst, test_x, test_y, feature_names)
 
-# --------------------------ΔAUC可视化--------------------------
-# 图1：带误差线的ΔAUC条形图
+# --------------------------Delta AUC visualization--------------------------
+# Figure 1: Delta AUC bar chart with error bars.
 plt.figure(figsize=(10, 6))
 bar_colors = ['skyblue' if x >= 0 else 'salmon' for x in perm_importance['ΔAUC']]
 plt.barh(perm_importance['Feature'], perm_importance['ΔAUC'], color=bar_colors)
@@ -191,15 +191,15 @@ plt.errorbar(
     xerr=perm_importance['ΔAUC Std'],
     fmt='none', ecolor='black', capsize=5
 )
-plt.axvline(x=0, color='black', linestyle='--')  # 零线
+plt.axvline(x=0, color='black', linestyle='--')  # Zero reference line.
 plt.xlabel('ΔAUC (AUC Decrease)')
 plt.ylabel('Features')
 plt.title('Permutation Importance with Stability (ΔAUC ± Std)')
-plt.gca().invert_yaxis()  # 从高到低排序
+plt.gca().invert_yaxis()  # Sort from high to low.
 plt.tight_layout()
 plt.show()
 
-# 图2：原始AUC vs 置换后AUC对比
+# Figure 2: comparison between original AUC and permuted AUC.
 plt.figure(figsize=(10, 6))
 x = np.arange(len(perm_importance))
 width = 0.35
@@ -213,7 +213,7 @@ plt.legend()
 plt.tight_layout()
 plt.show()
 
-# 图3：特征相对贡献度
+# Figure 3: relative feature contribution.
 total_abs_auc = perm_importance['ΔAUC'].abs().sum()
 perm_importance['Relative Contribution (%)'] = (perm_importance['ΔAUC'].abs() / total_abs_auc) * 100
 
@@ -228,13 +228,13 @@ plt.gca().invert_yaxis()
 plt.tight_layout()
 plt.show()
 
-# --------------------------SHAP分析--------------------------
-# 计算SHAP值
+# --------------------------SHAP analysis--------------------------
+# Calculate SHAP values.
 explainer = shap.TreeExplainer(bst)
 shap_values = explainer.shap_values(test_x)
 expected_value = explainer.expected_value
 
-# 计算SHAP重要性
+# Calculate SHAP-based importance.
 mean_abs_shap = np.mean(np.abs(shap_values), axis=0)
 shap_importance = pd.DataFrame({
     'Feature': feature_names,
@@ -244,15 +244,15 @@ shap_importance = pd.DataFrame({
 print("\n=== SHAP-based Feature Importance ===")
 print(shap_importance)
 
-# --------------------------SHAP可视化--------------------------
-# 图1：SHAP摘要图
+# --------------------------SHAP visualization--------------------------
+# Figure 1: SHAP summary plot.
 plt.figure(figsize=(10, 6))
 shap.summary_plot(shap_values, test_x, show=False)
 plt.title('SHAP Summary Plot')
 plt.tight_layout()
 plt.show()
 
-# 图2：Top4特征单个依赖图
+# Figure 2: individual dependence plots for the top four features.
 top4_features = shap_importance['Feature'].iloc[:4].tolist()
 print(f'\nTop 4 features for detailed analysis: {top4_features}')
 
@@ -266,14 +266,14 @@ for feature in top4_features:
     plt.tight_layout()
     plt.show()
 
-# 图3：4x4特征交互矩阵图（核心功能：所有Top4特征两两比较）
+# Figure 3: 4 x 4 feature-interaction matrix for all pairwise combinations among the top four features.
 if len(top4_features) == 4:
     fig, axs = plt.subplots(4, 4, figsize=(24, 20))
     plt.subplots_adjust(hspace=0.4, wspace=0.3)
 
     for i, main_feature in enumerate(top4_features):
         for j, interact_feature in enumerate(top4_features):
-            # 绘制交互依赖图
+            # Plot the SHAP interaction dependence plot.
             shap.dependence_plot(
                 main_feature, shap_values, test_x,
                 interaction_index=interact_feature,
@@ -281,13 +281,13 @@ if len(top4_features) == 4:
                 dot_size=15,  x_jitter=0.1
             )
 
-            # 美化子图
+            # Refine subplot appearance.
             axs[i, j].set_title(f'{main_feature} vs {interact_feature}', fontsize=10)
             axs[i, j].set_xlabel(main_feature, fontsize=8)
             axs[i, j].set_ylabel(f'SHAP value of {main_feature}', fontsize=8)
             axs[i, j].tick_params(axis='both', labelsize=6)
 
-            # 对角线标注
+            # Add a diagonal annotation.
             if i == j:
                 axs[i, j].text(0.5, 0.5, 'Same feature',
                                ha='center', va='center',
@@ -298,8 +298,8 @@ if len(top4_features) == 4:
     plt.tight_layout(rect=[0, 0, 1, 0.97])
     plt.show()
 
-# 图4：单个样本Waterfall图
-sample_idx = 0  # 选择第一个样本
+# Figure 4: waterfall plot for one sample.
+sample_idx = 0  # Select the first sample.
 shap_waterfall = shap.Explanation(
     values=shap_values[sample_idx],
     base_values=expected_value,
@@ -312,13 +312,13 @@ plt.title(f'SHAP Waterfall Plot (Sample {sample_idx})')
 plt.tight_layout()
 plt.show()
 
-# --------------------------ΔAUC与SHAP相关性分析--------------------------
-# 合并两种重要性指标
+# --------------------------Correlation analysis between Delta AUC and SHAP--------------------------
+# Merge the two importance metrics.
 corr_df = perm_importance[['Feature', 'ΔAUC']].merge(
     shap_importance, on='Feature'
 )
 
-# 相关性热图
+# Correlation heatmap.
 plt.figure(figsize=(8, 6))
 corr = corr_df[['ΔAUC', 'Mean |SHAP|']].corr()
 sns.heatmap(corr, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
@@ -326,7 +326,7 @@ plt.title('Correlation Between ΔAUC and Mean |SHAP|')
 plt.tight_layout()
 plt.show()
 
-# 散点图
+# Scatter plot.
 plt.figure(figsize=(8, 6))
 sns.scatterplot(x='ΔAUC', y='Mean |SHAP|', hue='Feature', data=corr_df, s=100)
 plt.axvline(x=0, color='black', linestyle='--')
@@ -337,7 +337,7 @@ plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.tight_layout()
 plt.show()
 
-# --------------------------ROC曲线--------------------------
+# --------------------------ROC curve--------------------------
 fpr, tpr, _ = metrics.roc_curve(test_y, ypred)
 roc_auc = metrics.auc(fpr, tpr)
 
@@ -353,8 +353,8 @@ plt.legend(loc='lower right')
 plt.tight_layout()
 plt.show()
 
-# --------------------------保存结果--------------------------
-# 保存预测结果和阈值分析
+# --------------------------Save results--------------------------
+# Save prediction results and threshold-analysis results.
 threshold_analysis = pd.DataFrame({
     'Threshold': thresholds,
     'Recall': recall_scores,
@@ -368,26 +368,10 @@ test_result = pd.DataFrame({
     'Predicted Class': y_pred
 }).reset_index(drop=True)
 
-# 保存所有结果
+# Save all results.
 test_result.to_csv('prediction_results.csv', index=False)
 threshold_analysis.to_csv('threshold_analysis.csv', index=False)
 perm_importance.to_csv('permutation_importance.csv', index=False)
 shap_importance.to_csv('shap_importance.csv', index=False)
 
 print("\nAll results saved successfully!")
-
-# 加载新的CSV文件
-new_df = pd.read_csv("input_all - 副本.csv", encoding='UTF-8')
-
-# 提取特征数据并进行预测
-new_data = new_df.iloc[:, 1:]  # 调整列索引以匹配您的数据集结构
-dnew = xgb.DMatrix(new_data)
-ypred_new = bst.predict(dnew)
-
-# 设置阈值、评价指标
-new_y_pred = (ypred_new >= 0.5) * 1
-
-# 将预测结果写入新的DataFrame并保存到文件
-new_test_result = pd.DataFrame({'prediction': ypred_new})
-new_test_result = new_test_result.reset_index(drop=False)
-new_test_result.to_csv('textXGresult3.txt', index=False)
